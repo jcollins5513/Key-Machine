@@ -4,6 +4,21 @@ CREATE TABLE IF NOT EXISTS holders (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY,
+  first_name TEXT NOT NULL,
+  last_name TEXT NOT NULL,
+  first_initial TEXT NOT NULL,
+  department TEXT,
+  position TEXT,
+  pin_salt TEXT NOT NULL,
+  pin_hash TEXT NOT NULL,
+  allowed_checkout INTEGER NOT NULL,
+  is_admin INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS keys (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -12,7 +27,7 @@ CREATE TABLE IF NOT EXISTS keys (
   last_holder_id TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL,
-  FOREIGN KEY (last_holder_id) REFERENCES holders(id)
+  FOREIGN KEY (last_holder_id) REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS events (
@@ -22,5 +37,5 @@ CREATE TABLE IF NOT EXISTS events (
   action TEXT NOT NULL,
   created_at TEXT NOT NULL,
   FOREIGN KEY (key_id) REFERENCES keys(id),
-  FOREIGN KEY (holder_id) REFERENCES holders(id)
+  FOREIGN KEY (holder_id) REFERENCES users(id)
 );

@@ -80,18 +80,66 @@ nfc.on('error', error => {
 });
 
 ipcMain.handle('keys:list', () => repo.listKeys());
-ipcMain.handle('holders:list', () => repo.listHolders());
+ipcMain.handle('users:list', () => repo.listUsers());
 
 ipcMain.handle('keys:create', (_event, payload: { name: string }) => {
   return repo.createKey(payload.name);
 });
 
-ipcMain.handle('holders:create', (_event, payload: { name: string }) => {
-  return repo.createHolder(payload.name);
-});
+ipcMain.handle(
+  'users:create',
+  (
+    _event,
+    payload: {
+      first_name: string;
+      last_name: string;
+      department?: string | null;
+      position?: string | null;
+      pin: string;
+      allowed_checkout: number;
+      is_admin: boolean;
+    }
+  ) => {
+    return repo.createUser(payload);
+  }
+);
 
-ipcMain.handle('keys:checkout', (_event, payload: { keyId: string; holderId: string }) => {
-  return repo.checkOut(payload.keyId, payload.holderId);
+ipcMain.handle(
+  'users:update',
+  (
+    _event,
+    payload: {
+      id: string;
+      updates: Partial<{
+        first_name: string;
+        last_name: string;
+        department: string | null;
+        position: string | null;
+        allowed_checkout: number;
+        is_admin: boolean;
+      }>;
+    }
+  ) => {
+    return repo.updateUser(payload.id, payload.updates);
+  }
+);
+
+ipcMain.handle(
+  'auth:login',
+  (_event, payload: { initial: string; last_name: string; pin: string }) => {
+    return repo.login(payload.initial, payload.last_name, payload.pin);
+  }
+);
+
+ipcMain.handle(
+  'auth:update-pin',
+  (_event, payload: { userId: string; currentPin: string; newPin: string }) => {
+    return repo.updatePin(payload.userId, payload.currentPin, payload.newPin);
+  }
+);
+
+ipcMain.handle('keys:checkout', (_event, payload: { keyId: string; userId: string }) => {
+  return repo.checkOut(payload.keyId, payload.userId);
 });
 
 ipcMain.handle('keys:checkin', (_event, payload: { keyId: string }) => {

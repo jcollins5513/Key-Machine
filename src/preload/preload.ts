@@ -4,10 +4,23 @@ console.log('[preload] loaded');
 
 const api = {
   listKeys: () => ipcRenderer.invoke('keys:list'),
-  listHolders: () => ipcRenderer.invoke('holders:list'),
+  listUsers: () => ipcRenderer.invoke('users:list'),
   createKey: (name: string) => ipcRenderer.invoke('keys:create', { name }),
-  createHolder: (name: string) => ipcRenderer.invoke('holders:create', { name }),
-  checkOut: (keyId: string, holderId: string) => ipcRenderer.invoke('keys:checkout', { keyId, holderId }),
+  createUser: (payload: {
+    first_name: string;
+    last_name: string;
+    department?: string | null;
+    position?: string | null;
+    pin: string;
+    allowed_checkout: number;
+    is_admin: boolean;
+  }) => ipcRenderer.invoke('users:create', payload),
+  updateUser: (payload: { id: string; updates: Record<string, unknown> }) =>
+    ipcRenderer.invoke('users:update', payload),
+  login: (payload: { initial: string; last_name: string; pin: string }) => ipcRenderer.invoke('auth:login', payload),
+  updatePin: (payload: { userId: string; currentPin: string; newPin: string }) =>
+    ipcRenderer.invoke('auth:update-pin', payload),
+  checkOut: (keyId: string, userId: string) => ipcRenderer.invoke('keys:checkout', { keyId, userId }),
   checkIn: (keyId: string) => ipcRenderer.invoke('keys:checkin', { keyId }),
   writeTag: (keyId: string) => ipcRenderer.invoke('nfc:write', { keyId }),
   eraseTag: () => ipcRenderer.invoke('nfc:erase'),

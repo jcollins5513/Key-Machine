@@ -17,7 +17,7 @@ export const KeyList = ({ title, keys }: KeyListProps) => {
               <strong className="grow">{key.name}</strong>
               <span className={`badge ${key.status}`}>{key.status}</span>
             </div>
-            {key.last_holder_name && <div>Last holder: {key.last_holder_name}</div>}
+            {key.last_holder_name && <div>Last user: {key.last_holder_name}</div>}
             <div className="row">
               <span>Tag: {key.tag_payload}</span>
             </div>

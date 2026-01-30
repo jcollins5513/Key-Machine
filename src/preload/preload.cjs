@@ -2,10 +2,13 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 const api = {
   listKeys: () => ipcRenderer.invoke('keys:list'),
-  listHolders: () => ipcRenderer.invoke('holders:list'),
+  listUsers: () => ipcRenderer.invoke('users:list'),
   createKey: name => ipcRenderer.invoke('keys:create', { name }),
-  createHolder: name => ipcRenderer.invoke('holders:create', { name }),
-  checkOut: (keyId, holderId) => ipcRenderer.invoke('keys:checkout', { keyId, holderId }),
+  createUser: payload => ipcRenderer.invoke('users:create', payload),
+  updateUser: payload => ipcRenderer.invoke('users:update', payload),
+  login: payload => ipcRenderer.invoke('auth:login', payload),
+  updatePin: payload => ipcRenderer.invoke('auth:update-pin', payload),
+  checkOut: (keyId, userId) => ipcRenderer.invoke('keys:checkout', { keyId, userId }),
   checkIn: keyId => ipcRenderer.invoke('keys:checkin', { keyId }),
   writeTag: keyId => ipcRenderer.invoke('nfc:write', { keyId }),
   eraseTag: () => ipcRenderer.invoke('nfc:erase'),

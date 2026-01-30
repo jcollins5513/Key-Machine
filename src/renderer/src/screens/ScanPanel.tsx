@@ -1,19 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 
 type ScanPanelProps = {
   scanPayload: { key: KeyRecord; suggestedAction: 'check_out' | 'check_in' } | null;
-  holders: HolderRecord[];
-  onCheckOut: (keyId: string, holderId: string) => void;
+  currentUser: UserRecord | null;
+  onCheckOut: (keyId: string) => void;
   onCheckIn: (keyId: string) => void;
 };
 
-export const ScanPanel = ({ scanPayload, holders, onCheckOut, onCheckIn }: ScanPanelProps) => {
-  const [holderId, setHolderId] = useState('');
-
-  useEffect(() => {
-    setHolderId('');
-  }, [scanPayload?.key.id]);
-
+export const ScanPanel = ({ scanPayload, currentUser, onCheckOut, onCheckIn }: ScanPanelProps) => {
   if (!scanPayload) {
     return (
       <div>
@@ -33,18 +27,14 @@ export const ScanPanel = ({ scanPayload, holders, onCheckOut, onCheckIn }: ScanP
       </p>
       {suggestedAction === 'check_out' ? (
         <div className="form">
-          <label>
-            Assign to holder
-            <select value={holderId} onChange={event => setHolderId(event.target.value)}>
-              <option value="">Select holder</option>
-              {holders.map(holder => (
-                <option key={holder.id} value={holder.id}>
-                  {holder.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button onClick={() => holderId && onCheckOut(key.id, holderId)} disabled={!holderId}>
+          {currentUser ? (
+            <p>
+              Checking out to <strong>{currentUser.first_name} {currentUser.last_name}</strong>
+            </p>
+          ) : (
+            <p>Log in to check out this key.</p>
+          )}
+          <button onClick={() => currentUser && onCheckOut(key.id)} disabled={!currentUser}>
             Confirm Check-Out
           </button>
         </div>
