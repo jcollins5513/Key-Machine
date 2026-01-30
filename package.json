@@ -1,0 +1,33 @@
+{
+  "name": "key-machine",
+  "version": "1.0.0",
+  "main": "out/main/main.js",
+  "type": "module",
+  "scripts": {
+    "dev": "cmd /c \"set ELECTRON_RUN_AS_NODE=&& set ELECTRON_ENTRY=out/main/main.js&& electron-vite dev\"",
+    "rebuild:native": "electron-rebuild -f --which-module @pokusew/pcsclite,better-sqlite3",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "better-sqlite3": "^12.6.2",
+    "electron": "^40.1.0",
+    "electron-vite": "^3.1.0",
+    "ndef": "^0.2.0",
+    "nfc-pcsc": "^0.8.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.10",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^4.7.0",
+    "cross-env": "^7.0.3",
+    "electron-rebuild": "^3.2.9",
+    "typescript": "^5.9.3"
+  }
+}
