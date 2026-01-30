@@ -4,34 +4,46 @@ import { ScanPanel } from './screens/ScanPanel';
 import { KeyList } from './screens/KeyList';
 
 export const App = () => {
+  const api = window.api;
   const [keys, setKeys] = useState<KeyRecord[]>([]);
   const [holders, setHolders] = useState<HolderRecord[]>([]);
   const [status, setStatus] = useState<{ connected: boolean; reader?: string }>({ connected: false });
   const [scanPayload, setScanPayload] = useState<{ key: KeyRecord; suggestedAction: 'check_out' | 'check_in' } | null>(null);
   const [message, setMessage] = useState<string>('');
   const [holderName, setHolderName] = useState('');
+  const [logs, setLogs] = useState<{ level: string; message: string; at: string }[]>([]);
 
   const refreshKeys = async () => {
-    setKeys(await window.api.listKeys());
+    if (!api) return;
+    setKeys(await api.listKeys());
   };
 
   const refreshHolders = async () => {
-    setHolders(await window.api.listHolders());
+    if (!api) return;
+    setHolders(await api.listHolders());
   };
 
   useEffect(() => {
+    if (!api) {
+      setMessage('Bridge not loaded. Preload script failed to expose the API.');
+      return;
+    }
+
     refreshKeys();
     refreshHolders();
 
-    window.api.onNfcStatus(statusUpdate => setStatus(statusUpdate));
-    window.api.onNfcTag(payload => {
+    api.onNfcStatus(statusUpdate => setStatus(statusUpdate));
+    api.onNfcLog(event => {
+      setLogs(prev => [...prev.slice(-199), event]);
+    });
+    api.onNfcTag(payload => {
       setScanPayload(payload);
       setMessage('');
     });
-    window.api.onNfcUnknown(event => {
+    api.onNfcUnknown(event => {
       setMessage(`Unknown tag detected (${event.keyId ?? 'no NDEF payload'})`);
     });
-    window.api.onNfcError(error => {
+    api.onNfcError(error => {
       setMessage(error.message);
     });
   }, []);
@@ -40,25 +52,46 @@ export const App = () => {
   const checkedOutKeys = useMemo(() => keys.filter(key => key.status === 'checked_out'), [keys]);
 
   const handleCreateHolder = async () => {
+    if (!api) return;
     if (!holderName.trim()) return;
-    await window.api.createHolder(holderName.trim());
+    await api.createHolder(holderName.trim());
     setHolderName('');
     refreshHolders();
   };
 
   const handleCheckOut = async (keyId: string, holderId: string) => {
-    await window.api.checkOut(keyId, holderId);
+    if (!api) return;
+    await api.checkOut(keyId, holderId);
     setMessage('Key checked out');
     setScanPayload(null);
     refreshKeys();
   };
 
   const handleCheckIn = async (keyId: string) => {
-    await window.api.checkIn(keyId);
+    if (!api) return;
+    await api.checkIn(keyId);
     setMessage('Key checked in');
     setScanPayload(null);
     refreshKeys();
   };
+
+  const handleRefreshReader = async () => {
+    if (!api) return;
+    await api.refreshReader();
+    setMessage('Reader refresh requested');
+  };
+
+  if (!api) {
+    return (
+      <div className="app">
+        <div className="card">
+          <h3>Key Machine</h3>
+          <p>Renderer loaded, but the preload bridge is missing.</p>
+          <p>Check the main process console for preload path errors.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="app">
@@ -69,6 +102,7 @@ export const App = () => {
             NFC Reader {status.connected ? 'Connected' : 'Disconnected'}
           </div>
           <div>{status.reader ?? ''}</div>
+          <button onClick={handleRefreshReader}>Refresh Reader</button>
         </div>
         {message && <p>{message}</p>}
       </div>
@@ -107,6 +141,22 @@ export const App = () => {
 
       <KeyList title="Available Keys" keys={availableKeys} />
       <KeyList title="Checked Out Keys" keys={checkedOutKeys} />
+
+      <div className="card">
+        <h3>Reader Log</h3>
+        <div className="list">
+          {logs.length === 0 && <p>No log entries yet.</p>}
+          {[...logs].reverse().map((entry, index) => (
+            <div key={`${entry.at}-${index}`} className="list-item">
+              <div className="row">
+                <span className={`badge ${entry.level}`}>{entry.level}</span>
+                <span>{new Date(entry.at).toLocaleTimeString()}</span>
+              </div>
+              <div>{entry.message}</div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 };

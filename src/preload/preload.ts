@@ -1,6 +1,6 @@
-import electron from 'electron';
+import { contextBridge, ipcRenderer } from 'electron';
 
-const { contextBridge, ipcRenderer } = electron;
+console.log('[preload] loaded');
 
 const api = {
   listKeys: () => ipcRenderer.invoke('keys:list'),
@@ -10,8 +10,13 @@ const api = {
   checkOut: (keyId: string, holderId: string) => ipcRenderer.invoke('keys:checkout', { keyId, holderId }),
   checkIn: (keyId: string) => ipcRenderer.invoke('keys:checkin', { keyId }),
   writeTag: (keyId: string) => ipcRenderer.invoke('nfc:write', { keyId }),
+  eraseTag: () => ipcRenderer.invoke('nfc:erase'),
+  refreshReader: () => ipcRenderer.invoke('nfc:refresh'),
   onNfcStatus: (listener: (status: { connected: boolean; reader?: string }) => void) => {
     ipcRenderer.on('nfc:status', (_event, status) => listener(status));
+  },
+  onNfcLog: (listener: (payload: { level: string; message: string; at: string }) => void) => {
+    ipcRenderer.on('nfc:log', (_event, payload) => listener(payload));
   },
   onNfcTag: (listener: (payload: any) => void) => {
     ipcRenderer.on('nfc:tag', (_event, payload) => listener(payload));

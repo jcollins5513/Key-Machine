@@ -1,22 +1,26 @@
-import electron from 'electron';
-import { join } from 'path';
+import { app, BrowserWindow, ipcMain } from 'electron';
+import { dirname, join } from 'path';
+import { existsSync } from 'fs';
+import { fileURLToPath } from 'url';
 import { Repo } from './db/repo';
 import { NfcService } from './nfc/NfcService';
 
-const { app, BrowserWindow, ipcMain } = electron;
-
 let mainWindow: BrowserWindow | null = null;
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const createWindow = () => {
-  const preloadPath = process.env.VITE_DEV_SERVER_URL
-    ? join(__dirname, '../preload/preload.mjs')
-    : join(__dirname, '../preload/preload.js');
+  const devPreloadPath = join(__dirname, '../../src/preload/preload.cjs');
+  const prodPreloadPath = join(__dirname, '../preload/preload.js');
+  const preloadPath = existsSync(devPreloadPath) ? devPreloadPath : prodPreloadPath;
+  console.log('Preload path', preloadPath, 'exists', existsSync(preloadPath));
 
   mainWindow = new BrowserWindow({
     width: 1100,
     height: 750,
     webPreferences: {
       preload: preloadPath,
+      contextIsolation: true,
+      nodeIntegration: false,
     },
   });
 
@@ -52,6 +56,10 @@ const nfc = new NfcService();
 
 nfc.on('status', status => {
   mainWindow?.webContents.send('nfc:status', status);
+});
+
+nfc.on('log', event => {
+  mainWindow?.webContents.send('nfc:log', event);
 });
 
 nfc.on('tag', async event => {
@@ -92,4 +100,13 @@ ipcMain.handle('keys:checkin', (_event, payload: { keyId: string }) => {
 
 ipcMain.handle('nfc:write', async (_event, payload: { keyId: string }) => {
   return nfc.writeTag(payload.keyId);
+});
+
+ipcMain.handle('nfc:erase', async () => {
+  return nfc.eraseTag();
+});
+
+ipcMain.handle('nfc:refresh', async () => {
+  await nfc.refresh();
+  return { success: true };
 });

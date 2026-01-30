@@ -85,6 +85,21 @@ select {
   color: #b71c1c;
 }
 
+.badge.info {
+  background: #e8f5e9;
+  color: #1b5e20;
+}
+
+.badge.warn {
+  background: #fff8e1;
+  color: #7a4f00;
+}
+
+.badge.error {
+  background: #ffebee;
+  color: #b71c1c;
+}
+
 .form {
   display: grid;
   gap: 8px;

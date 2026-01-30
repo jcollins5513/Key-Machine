@@ -1,7 +1,10 @@
 import Database from 'better-sqlite3';
 import { existsSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export type KeyRecord = {
   id: string;

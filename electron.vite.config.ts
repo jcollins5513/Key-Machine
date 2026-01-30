@@ -20,6 +20,16 @@ export default defineConfig({
   },
   preload: {
     entry: 'src/preload/preload.ts',
+    vite: {
+      build: {
+        rollupOptions: {
+          output: {
+            format: 'cjs',
+            entryFileNames: 'preload.js',
+          },
+        },
+      },
+    },
   },
   renderer: {
     resolve: {

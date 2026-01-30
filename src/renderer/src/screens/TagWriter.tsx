@@ -28,6 +28,21 @@ export const TagWriter = ({ onKeyCreated }: TagWriterProps) => {
     }
   };
 
+  const handleErase = async () => {
+    if (!window.confirm('Erase tag data so it can be reused?')) return;
+    setBusy(true);
+    setStatus('Tap a tag to erase...');
+
+    try {
+      await window.api.eraseTag();
+      setStatus('Tag erased successfully.');
+    } catch (error) {
+      setStatus(`Erase failed: ${String(error)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div>
       <h3>Tag Writer</h3>
@@ -38,9 +53,14 @@ export const TagWriter = ({ onKeyCreated }: TagWriterProps) => {
           onChange={event => setName(event.target.value)}
           disabled={busy}
         />
-        <button onClick={handleWrite} disabled={busy}>
+        <div className="actions">
+          <button onClick={handleWrite} disabled={busy}>
           {busy ? 'Waiting for tag...' : 'Write Tag'}
-        </button>
+          </button>
+          <button onClick={handleErase} disabled={busy}>
+            {busy ? 'Waiting for tag...' : 'Erase Tag'}
+          </button>
+        </div>
       </div>
       {status && <p>{status}</p>}
     </div>

@@ -27,7 +27,10 @@ declare global {
       checkOut: (keyId: string, holderId: string) => Promise<KeyRecord>;
       checkIn: (keyId: string) => Promise<KeyRecord>;
       writeTag: (keyId: string) => Promise<{ success: boolean; uid?: string }>;
+      eraseTag: () => Promise<{ success: boolean; uid?: string }>;
+      refreshReader: () => Promise<{ success: boolean }>;
       onNfcStatus: (listener: (status: { connected: boolean; reader?: string }) => void) => void;
+      onNfcLog: (listener: (payload: { level: string; message: string; at: string }) => void) => void;
       onNfcTag: (listener: (payload: { key: KeyRecord; suggestedAction: 'check_out' | 'check_in' }) => void) => void;
       onNfcUnknown: (listener: (payload: { keyId: string }) => void) => void;
       onNfcError: (listener: (payload: { message: string }) => void) => void;
