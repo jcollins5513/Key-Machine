@@ -1,5 +1,5 @@
 import { EventEmitter } from 'events';
-import { NFC, KEY_TYPE_A } from 'nfc-pcsc';
+import { NFC, KEY_TYPE_A, KEY_TYPE_B } from 'nfc-pcsc';
 import * as ndef from 'ndef';
 
 type NfcStatus = {
@@ -89,8 +89,20 @@ export class NfcService extends EventEmitter {
               this.log('info', 'Tag erased');
             }
           } catch (error) {
-            pending.reject(error instanceof Error ? error : new Error(String(error)));
-            this.log('error', `${pending.type === 'write' ? 'Write' : 'Erase'} failed: ${String(error)}`);
+            const errStr = String(error);
+            const isCardNotConnected =
+              errStr.includes('card_not_connected') ||
+              (error && typeof error === 'object' && 'code' in error && (error as { code: string }).code === 'card_not_connected');
+            if (isCardNotConnected) {
+              pending.reject(
+                new Error(
+                  'Connection lost. Hold the tag steady on the reader until pairing completes, then click Pair again.'
+                )
+              );
+            } else {
+              pending.reject(error instanceof Error ? error : new Error(errStr));
+            }
+            this.log('error', `${pending.type === 'write' ? 'Write' : 'Erase'} failed: ${errStr}`);
           }
           return;
         }
@@ -153,18 +165,34 @@ export class NfcService extends EventEmitter {
     const defaultKey = Buffer.from('FFFFFFFFFFFF', 'hex');
     let raw: Buffer | null = null;
 
+    // Try NTAG/Ultralight first (no auth) - most common for vehicle keys
     try {
-      await reader.authenticate(4, KEY_TYPE_A, defaultKey);
-      raw = await reader.read(4, 48, 16);
+      raw = await reader.read(4, 48, 4);
     } catch (error) {
-      this.log('warn', `Classic read failed, retrying: ${String(error)}`);
+      const text = String(error);
+      if (text.includes('0x6300')) {
+        throw new Error(
+          'Tag may be locked or password-protected (0x6300). Use a fresh NTAG213/215/216 or MIFARE Ultralight tag.'
+        );
+      }
+      if (text.includes('Invalid response length 0')) {
+        this.log('warn', 'NTAG read failed, trying MIFARE Classic');
+      } else {
+        this.log('warn', `NTAG read failed, retrying: ${text}`);
+      }
     }
 
     if (!raw) {
       try {
-        raw = await reader.read(4, 48, 4);
+        await reader.authenticate(4, KEY_TYPE_A, defaultKey);
+        raw = await reader.read(4, 48, 16);
       } catch (error) {
         const text = String(error);
+        if (text.includes('0x6300')) {
+          throw new Error(
+            'Tag may be locked or password-protected (0x6300). Use a fresh NTAG213/215/216 or MIFARE Ultralight tag.'
+          );
+        }
         if (text.includes('Invalid response length 0')) {
           this.log('warn', 'Read failed: tag requires auth or is not readable');
           return null;
@@ -200,26 +228,77 @@ export class NfcService extends EventEmitter {
   private async writeMessage(reader: any, message: Uint8Array) {
     const defaultKey = Buffer.from('FFFFFFFFFFFF', 'hex');
 
+    // Try NTAG/Ultralight first (most common for vehicle keys - faster, less connection loss)
+    try {
+      const tlv = buildNdefTlv(message, 4);
+      await reader.write(4, tlv, 4);
+      return;
+    } catch (error) {
+      const text = String(error);
+      if (text.includes('card_not_connected')) {
+        throw error;
+      }
+      if (text.includes('0x6300')) {
+        throw new Error(
+          'Write failed (0x6300). Tag may be locked or password-protected. ' +
+            'Use a fresh NTAG213/215/216 or MIFARE Ultralight tag. Avoid pre-configured or locked tags.'
+        );
+      }
+      this.log('warn', `NTAG/Ultralight write failed, trying MIFARE Classic: ${text}`);
+    }
+
+    // Try MIFARE Classic with Key A
     try {
       await reader.authenticate(4, KEY_TYPE_A, defaultKey);
       const classicTlv = buildNdefTlv(message, 16);
       await reader.write(4, classicTlv, 16);
       return;
     } catch (error) {
-      this.log('warn', `Auth/write as MIFARE Classic failed, retrying: ${String(error)}`);
+      this.log('warn', `Auth/write as MIFARE Classic (Key A) failed: ${String(error)}`);
     }
 
+    // Try MIFARE Classic with Key B (some tags use Key B for writes)
     try {
+      await reader.authenticate(4, KEY_TYPE_B, defaultKey);
+      const classicTlv = buildNdefTlv(message, 16);
+      await reader.write(4, classicTlv, 16);
+      return;
+    } catch (error) {
+      this.log('warn', `Auth/write as MIFARE Classic (Key B) failed: ${String(error)}`);
+    }
+
+    // Try NTAG with PWD_AUTH (for password-protected tags)
+    try {
+      await this.ntagPasswordAuth(reader);
       const tlv = buildNdefTlv(message, 4);
       await reader.write(4, tlv, 4);
+      return;
     } catch (error) {
       const text = String(error);
-      if (text.includes('0x6300')) {
-        throw new Error(
-          'Write failed (0x6300). Tag may be locked or require authentication. Try an NTAG/Ultralight tag or a default-key MIFARE Classic.'
-        );
+      if (text.includes('card_not_connected')) {
+        throw error;
       }
-      throw error;
+      throw new Error(
+        'Write failed. Use a fresh NTAG213/215/216 or MIFARE Ultralight tag. ' +
+          'Hold the tag steady on the reader until pairing completes.'
+      );
+    }
+  }
+
+  /**
+   * NTAG password auth with default credentials (ACR122U / PN533 readers only).
+   * Use when tag has password protection enabled with factory defaults.
+   */
+  private async ntagPasswordAuth(reader: any): Promise<void> {
+    if (typeof reader.transmit !== 'function') return;
+    const password = Buffer.from('FFFFFFFF', 'hex');
+    const cmd = Buffer.concat([
+      Buffer.from([0xff, 0x00, 0x00, 0x00, 0x07, 0xd4, 0x42, 0x1b]),
+      password,
+    ]);
+    const response = await reader.transmit(cmd, 7);
+    if (response.length < 5 || response[2] !== 0x00) {
+      throw new Error('PWD_AUTH failed');
     }
   }
 

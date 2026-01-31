@@ -5,7 +5,26 @@ console.log('[preload] loaded');
 const api = {
   listKeys: () => ipcRenderer.invoke('keys:list'),
   listUsers: () => ipcRenderer.invoke('users:list'),
-  createKey: (name: string) => ipcRenderer.invoke('keys:create', { name }),
+  getKey: (id: string) => ipcRenderer.invoke('keys:get', { id }),
+  listEventsByKey: (keyId: string) => ipcRenderer.invoke('keys:events', { keyId }),
+  importInventory: (vehicles: Array<{
+    stock_number: string;
+    vin?: string | null;
+    vin_last8?: string | null;
+    year?: string | null;
+    make?: string | null;
+    model?: string | null;
+    photo_path?: string | null;
+  }>) => ipcRenderer.invoke('keys:import-inventory', { vehicles }),
+  createKey: (input: string | {
+    name: string;
+    stock_number: string;
+    vin_last8?: string | null;
+    year?: string | null;
+    make?: string | null;
+    model?: string | null;
+    photo_path?: string | null;
+  }) => ipcRenderer.invoke('keys:create', typeof input === 'string' ? { name: input } : input as Record<string, unknown>),
   createUser: (payload: {
     first_name: string;
     last_name: string;
@@ -22,6 +41,7 @@ const api = {
     ipcRenderer.invoke('auth:update-pin', payload),
   checkOut: (keyId: string, userId: string) => ipcRenderer.invoke('keys:checkout', { keyId, userId }),
   checkIn: (keyId: string) => ipcRenderer.invoke('keys:checkin', { keyId }),
+  sellKey: (keyId: string) => ipcRenderer.invoke('keys:sell', { keyId }),
   writeTag: (keyId: string) => ipcRenderer.invoke('nfc:write', { keyId }),
   eraseTag: () => ipcRenderer.invoke('nfc:erase'),
   refreshReader: () => ipcRenderer.invoke('nfc:refresh'),
@@ -36,6 +56,9 @@ const api = {
   },
   onNfcUnknown: (listener: (payload: any) => void) => {
     ipcRenderer.on('nfc:unknown', (_event, payload) => listener(payload));
+  },
+  onNfcTagRaw: (listener: (payload: { payload: string; uid?: string }) => void) => {
+    ipcRenderer.on('nfc:tag-raw', (_event, payload) => listener(payload));
   },
   onNfcError: (listener: (payload: { message: string }) => void) => {
     ipcRenderer.on('nfc:error', (_event, payload) => listener(payload));

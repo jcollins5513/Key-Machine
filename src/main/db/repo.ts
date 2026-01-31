@@ -9,12 +9,28 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 export type KeyRecord = {
   id: string;
   name: string;
-  tag_payload: string;
-  status: 'available' | 'checked_out';
+  tag_payload: string | null;
+  stock_number: string | null;
+  vin_last8: string | null;
+  year: string | null;
+  make: string | null;
+  model: string | null;
+  photo_path: string | null;
+  tag_paired: number;
+  status: 'available' | 'checked_out' | 'sold';
   last_holder_id: string | null;
   created_at: string;
   updated_at: string;
   last_holder_name?: string | null;
+};
+
+export type EventRecord = {
+  id: string;
+  key_id: string;
+  holder_id: string | null;
+  holder_name: string | null;
+  action: string;
+  created_at: string;
 };
 
 export type UserRecord = {
@@ -46,13 +62,35 @@ export class Repo {
     const schemaPath = join(__dirname, 'schema.sql');
     const schema = existsSync(schemaPath) ? readFileSync(schemaPath, 'utf-8') : SCHEMA_SQL;
     this.db.exec(schema);
+    this.migrate();
   }
 
-  listKeys(): KeyRecord[] {
+  private migrate() {
+    const columns = [
+      ['stock_number', 'TEXT'],
+      ['vin_last8', 'TEXT'],
+      ['year', 'TEXT'],
+      ['make', 'TEXT'],
+      ['model', 'TEXT'],
+      ['photo_path', 'TEXT'],
+      ['tag_paired', 'INTEGER DEFAULT 0'],
+    ];
+    for (const [name, type] of columns) {
+      try {
+        this.db.exec(`ALTER TABLE keys ADD COLUMN ${name} ${type}`);
+      } catch (err) {
+        if (!String(err).includes('duplicate column name')) throw err;
+      }
+    }
+  }
+
+  listKeys(includeSold = true): KeyRecord[] {
+    const statusFilter = includeSold ? '' : " AND keys.status != 'sold'";
     const stmt = this.db.prepare(`
       SELECT keys.*, users.first_name || ' ' || users.last_name AS last_holder_name
       FROM keys
       LEFT JOIN users ON users.id = keys.last_holder_id
+      WHERE 1=1 ${statusFilter}
       ORDER BY keys.name ASC
     `);
     return stmt.all() as KeyRecord[];
@@ -67,23 +105,47 @@ export class Repo {
     return stmt.all() as UserRecord[];
   }
 
-  createKey(name: string): KeyRecord {
+  createKey(input: string | {
+    name: string;
+    stock_number: string;
+    vin_last8?: string | null;
+    year?: string | null;
+    make?: string | null;
+    model?: string | null;
+    photo_path?: string | null;
+  }): KeyRecord {
     const id = randomUUID();
     const now = new Date().toISOString();
+    const isLegacy = typeof input === 'string';
+    const name = isLegacy ? input : input.name;
+    const stockNumber = isLegacy ? null : input.stock_number;
+    const tagPayload = stockNumber ?? id;
+    const vinLast8 = isLegacy ? null : (input.vin_last8 ?? null);
+    const year = isLegacy ? null : (input.year ?? null);
+    const make = isLegacy ? null : (input.make ?? null);
+    const model = isLegacy ? null : (input.model ?? null);
+    const photoPath = isLegacy ? null : (input.photo_path ?? null);
+
     const stmt = this.db.prepare(`
-      INSERT INTO keys (id, name, tag_payload, status, last_holder_id, created_at, updated_at)
-      VALUES (@id, @name, @tag_payload, @status, @last_holder_id, @created_at, @updated_at)
+      INSERT INTO keys (id, name, tag_payload, stock_number, vin_last8, year, make, model, photo_path, status, last_holder_id, created_at, updated_at)
+      VALUES (@id, @name, @tag_payload, @stock_number, @vin_last8, @year, @make, @model, @photo_path, @status, @last_holder_id, @created_at, @updated_at)
     `);
     stmt.run({
       id,
       name,
-      tag_payload: id,
+      tag_payload: tagPayload,
+      stock_number: stockNumber,
+      vin_last8: vinLast8,
+      year,
+      make,
+      model,
+      photo_path: photoPath,
       status: 'available',
       last_holder_id: null,
       created_at: now,
       updated_at: now,
     });
-    return this.getKeyById(id)!;
+    return this.getKeyByIdInternal(id)!;
   }
 
   createUser(input: {
@@ -211,8 +273,96 @@ export class Repo {
   }
 
   findKeyByTag(tagPayload: string) {
-    const stmt = this.db.prepare(`SELECT * FROM keys WHERE tag_payload = @tag_payload LIMIT 1`);
-    return stmt.get({ tag_payload: tagPayload }) as KeyRecord | undefined;
+    const byStock = this.db.prepare(`SELECT * FROM keys WHERE stock_number = @payload AND status != 'sold' LIMIT 1`);
+    let key = byStock.get({ payload: tagPayload }) as KeyRecord | undefined;
+    if (!key) {
+      const byTag = this.db.prepare(`SELECT * FROM keys WHERE tag_payload = @payload AND status != 'sold' LIMIT 1`);
+      key = byTag.get({ payload: tagPayload }) as KeyRecord | undefined;
+    }
+    return key;
+  }
+
+  markTagPaired(keyId: string) {
+    const now = new Date().toISOString();
+    const update = this.db.prepare(`
+      UPDATE keys SET tag_paired = 1, updated_at = @updated_at WHERE id = @key_id
+    `);
+    update.run({ key_id: keyId, updated_at: now });
+    return this.getKeyByIdInternal(keyId);
+  }
+
+  sellKey(keyId: string) {
+    const now = new Date().toISOString();
+    const key = this.getKeyByIdInternal(keyId);
+    if (!key) throw new Error('Key not found');
+    const update = this.db.prepare(`
+      UPDATE keys
+      SET status = 'sold',
+          last_holder_id = NULL,
+          updated_at = @updated_at
+      WHERE id = @key_id
+    `);
+    update.run({ key_id: keyId, updated_at: now });
+    this.insertEvent(keyId, null, 'sold', now);
+    return this.getKeyByIdInternal(keyId);
+  }
+
+  getKeyById(id: string): KeyRecord | undefined {
+    return this.getKeyByIdInternal(id);
+  }
+
+  importInventory(vehicles: Array<{
+    stock_number: string;
+    vin?: string | null;
+    vin_last8?: string | null;
+    year?: string | null;
+    make?: string | null;
+    model?: string | null;
+    photo_path?: string | null;
+  }>): { created: number; skipped: number; removed: number } {
+    let created = 0;
+    let skipped = 0;
+    const importStockNumbers = new Set(vehicles.map(v => v.stock_number));
+    for (const v of vehicles) {
+      const vinLast8 = v.vin_last8 ?? (v.vin ? v.vin.slice(-8) : null);
+      const name = [v.year, v.make, v.model].filter(Boolean).join(' ') || v.stock_number;
+      const existing = this.db.prepare(`SELECT id FROM keys WHERE stock_number = @sn LIMIT 1`).get({ sn: v.stock_number });
+      if (existing) {
+        skipped++;
+        continue;
+      }
+      this.createKey({
+        name,
+        stock_number: v.stock_number,
+        vin_last8: vinLast8,
+        year: v.year ?? null,
+        make: v.make ?? null,
+        model: v.model ?? null,
+        photo_path: v.photo_path ?? null,
+      });
+      created++;
+    }
+    let removed = 0;
+    if (importStockNumbers.size > 0) {
+      const placeholders = Array.from(importStockNumbers).map(() => '?').join(',');
+      const removeStmt = this.db.prepare(`
+        DELETE FROM keys WHERE stock_number IS NOT NULL AND stock_number != '' AND stock_number NOT IN (${placeholders})
+      `);
+      removed = removeStmt.run(...Array.from(importStockNumbers)).changes;
+    }
+    return { created, skipped, removed };
+  }
+
+  listEventsByKey(keyId: string): EventRecord[] {
+    const stmt = this.db.prepare(`
+      SELECT events.*, users.first_name || ' ' || users.last_name AS holder_name
+      FROM events
+      LEFT JOIN users ON users.id = events.holder_id
+      WHERE events.key_id = @key_id
+      ORDER BY events.created_at DESC
+      LIMIT 50
+    `);
+    return stmt.all({ key_id: keyId }) as EventRecord[];
   }
 
   login(initial: string, lastName: string, pin: string): UserRecord {
@@ -261,7 +411,7 @@ export class Repo {
     });
   }
 
-  private getKeyById(id: string) {
+  private getKeyByIdInternal(id: string) {
     const stmt = this.db.prepare(`SELECT * FROM keys WHERE id = @id`);
     return stmt.get({ id }) as KeyRecord | undefined;
   }
@@ -329,7 +479,14 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS keys (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
-  tag_payload TEXT NOT NULL,
+  tag_payload TEXT,
+  stock_number TEXT UNIQUE,
+  vin_last8 TEXT,
+  year TEXT,
+  make TEXT,
+  model TEXT,
+  photo_path TEXT,
+  tag_paired INTEGER DEFAULT 0,
   status TEXT NOT NULL,
   last_holder_id TEXT,
   created_at TEXT NOT NULL,

@@ -3,12 +3,28 @@
 type KeyRecord = {
   id: string;
   name: string;
-  tag_payload: string;
-  status: 'available' | 'checked_out';
+  tag_payload: string | null;
+  stock_number: string | null;
+  vin_last8: string | null;
+  year: string | null;
+  make: string | null;
+  model: string | null;
+  photo_path: string | null;
+  tag_paired: number;
+  status: 'available' | 'checked_out' | 'sold';
   last_holder_id: string | null;
   created_at: string;
   updated_at: string;
   last_holder_name?: string | null;
+};
+
+type EventRecord = {
+  id: string;
+  key_id: string;
+  holder_id: string | null;
+  holder_name: string | null;
+  action: string;
+  created_at: string;
 };
 
 type HolderRecord = {
@@ -35,7 +51,26 @@ declare global {
     api: {
       listKeys: () => Promise<KeyRecord[]>;
       listUsers: () => Promise<UserRecord[]>;
-      createKey: (name: string) => Promise<KeyRecord>;
+      getKey: (id: string) => Promise<KeyRecord | undefined>;
+      listEventsByKey: (keyId: string) => Promise<EventRecord[]>;
+      importInventory: (vehicles: Array<{
+        stock_number: string;
+        vin?: string | null;
+        vin_last8?: string | null;
+        year?: string | null;
+        make?: string | null;
+        model?: string | null;
+        photo_path?: string | null;
+      }>) => Promise<{ created: number; skipped: number; removed: number }>;
+      createKey: (input: string | {
+        name: string;
+        stock_number: string;
+        vin_last8?: string | null;
+        year?: string | null;
+        make?: string | null;
+        model?: string | null;
+        photo_path?: string | null;
+      }) => Promise<KeyRecord>;
       createUser: (payload: {
         first_name: string;
         last_name: string;
@@ -60,6 +95,7 @@ declare global {
       updatePin: (payload: { userId: string; currentPin: string; newPin: string }) => Promise<UserRecord>;
       checkOut: (keyId: string, userId: string) => Promise<KeyRecord>;
       checkIn: (keyId: string) => Promise<KeyRecord>;
+      sellKey: (keyId: string) => Promise<KeyRecord>;
       writeTag: (keyId: string) => Promise<{ success: boolean; uid?: string }>;
       eraseTag: () => Promise<{ success: boolean; uid?: string }>;
       refreshReader: () => Promise<{ success: boolean }>;
@@ -67,6 +103,7 @@ declare global {
       onNfcLog: (listener: (payload: { level: string; message: string; at: string }) => void) => void;
       onNfcTag: (listener: (payload: { key: KeyRecord; suggestedAction: 'check_out' | 'check_in' }) => void) => void;
       onNfcUnknown: (listener: (payload: { keyId: string }) => void) => void;
+      onNfcTagRaw: (listener: (payload: { payload: string; uid?: string }) => void) => void;
       onNfcError: (listener: (payload: { message: string }) => void) => void;
     };
   }
