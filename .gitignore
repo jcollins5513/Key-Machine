@@ -2,6 +2,7 @@ node_modules/
 out/
 dist/
 build/
+.vite/
 
 # Logs
 logs/
@@ -25,4 +26,6 @@ Thumbs.db
 # Electron artifacts
 *.asar
 *.asar.unpacked/
+
+# Source maps
 *.map
