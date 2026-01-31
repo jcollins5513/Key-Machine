@@ -12,10 +12,24 @@ export const Inventory = ({ keys, onPairTag, onRefresh }: InventoryProps) => {
   const [selectedKey, setSelectedKey] = useState<KeyRecord | null>(null);
   const [pairing, setPairing] = useState(false);
   const [pairStatus, setPairStatus] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const available = useMemo(() => keys.filter(k => k.status === 'available'), [keys]);
-  const checkedOut = useMemo(() => keys.filter(k => k.status === 'checked_out'), [keys]);
-  const sold = useMemo(() => keys.filter(k => k.status === 'sold'), [keys]);
+  const filterBySearch = (list: KeyRecord[]) => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter((k) => {
+      const year = (k.year ?? '').toLowerCase();
+      const make = (k.make ?? '').toLowerCase();
+      const model = (k.model ?? '').toLowerCase();
+      const stock = (k.stock_number ?? '').toLowerCase();
+      const name = (k.name ?? '').toLowerCase();
+      return year.includes(q) || make.includes(q) || model.includes(q) || stock.includes(q) || name.includes(q);
+    });
+  };
+
+  const available = useMemo(() => filterBySearch(keys.filter(k => k.status === 'available')), [keys, searchQuery]);
+  const checkedOut = useMemo(() => filterBySearch(keys.filter(k => k.status === 'checked_out')), [keys, searchQuery]);
+  const sold = useMemo(() => filterBySearch(keys.filter(k => k.status === 'sold')), [keys, searchQuery]);
 
   const handlePairTag = async () => {
     if (!selectedKey) return;
@@ -67,6 +81,14 @@ export const Inventory = ({ keys, onPairTag, onRefresh }: InventoryProps) => {
     <PageLayout title="Inventory" subtitle="Click a vehicle to pair its NFC tag. View all vehicle keys and their status.">
       <div className="inventory-layout">
         <div className="inventory-list">
+          <div className="form" style={{ marginBottom: '16px' }}>
+            <input
+              type="text"
+              placeholder="Search by year, make, model, or stock number..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
           <Card title="Available">
             <div className="inventory-grid">
               {available.length === 0 && <p>No available keys.</p>}

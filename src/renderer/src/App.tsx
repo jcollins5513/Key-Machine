@@ -262,6 +262,7 @@ export const App = () => {
       case 'checkout':
         return (
           <CheckOutKey
+            keys={keys}
             scanPayload={activeTab === 'checkout' ? scanPayload : null}
             currentUser={currentUser}
             status={status}

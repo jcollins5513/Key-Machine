@@ -592,6 +592,32 @@ button:disabled {
   font-size: 0.85rem;
 }
 
+/* Vehicle search picker */
+.vehicle-search-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.vehicle-search-results {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.vehicle-search-selected {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.vehicle-search-results .list-item {
+  cursor: pointer;
+}
+
+.vehicle-search-results .list-item:hover {
+  background: rgba(59, 130, 246, 0.12);
+}
+
 /* Read Tag */
 .read-tag-result h4 {
   margin: 0 0 16px;

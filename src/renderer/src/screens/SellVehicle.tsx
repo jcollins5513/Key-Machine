@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { PageLayout } from '../components/PageLayout';
 import { Card } from '../components/Card';
+import { VehicleSearchPicker } from '../components/VehicleSearchPicker';
 
 type SellVehicleProps = {
   keys: KeyRecord[];
@@ -13,7 +14,6 @@ type SellVehicleProps = {
 
 export const SellVehicle = ({ keys, scanPayload, onSell, onClearScan, status, message }: SellVehicleProps) => {
   const [busy, setBusy] = useState(false);
-  const [selectedKeyId, setSelectedKeyId] = useState('');
 
   const handleSellFromScan = async () => {
     if (!scanPayload) return;
@@ -26,12 +26,10 @@ export const SellVehicle = ({ keys, scanPayload, onSell, onClearScan, status, me
     }
   };
 
-  const handleSellFromDropdown = async () => {
-    if (!selectedKeyId) return;
+  const handleSellFromSearch = async (keyId: string) => {
     setBusy(true);
     try {
-      await onSell(selectedKeyId, { attemptErase: false });
-      setSelectedKeyId('');
+      await onSell(keyId, { attemptErase: false });
     } finally {
       setBusy(false);
     }
@@ -54,32 +52,19 @@ export const SellVehicle = ({ keys, scanPayload, onSell, onClearScan, status, me
           <>
             <p className="scan-prompt">Tap the vehicle's NFC tag to sell and remove it from inventory.</p>
             {keys.filter((k) => k.status !== 'sold').length > 0 && (
-              <div className="form" style={{ marginTop: '1rem' }}>
-                <label>
-                  Or select vehicle to sell (if scan fails)
-                  <select
-                    value={selectedKeyId}
-                    onChange={(e) => setSelectedKeyId(e.target.value)}
-                    disabled={busy}
-                  >
-                    <option value="">— Select vehicle —</option>
-                    {keys.filter((k) => k.status !== 'sold').map((k) => (
-                      <option key={k.id} value={k.id}>
-                        {k.stock_number ? `#${k.stock_number} ` : ''}
-                        {[k.year, k.make, k.model].filter(Boolean).join(' ') || k.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <div className="actions" style={{ marginTop: '0.5rem' }}>
-                  <button
-                    onClick={handleSellFromDropdown}
-                    disabled={busy || !selectedKeyId}
-                    className="btn-danger"
-                  >
-                    {busy ? 'Processing...' : 'Sell Selected Vehicle'}
-                  </button>
-                </div>
+              <div style={{ marginTop: '1rem' }}>
+                <p className="muted" style={{ marginBottom: '12px' }}>
+                  Or search by year, make, or model to select a vehicle (if scan fails)
+                </p>
+                <VehicleSearchPicker
+                  keys={keys}
+                  statusFilter="unsold"
+                  placeholder="Search by year, make, model, or stock number..."
+                  showHistory={true}
+                  actionLabel={busy ? 'Processing...' : 'Sell Selected Vehicle'}
+                  onAction={handleSellFromSearch}
+                  actionDisabled={busy}
+                />
               </div>
             )}
           </>
